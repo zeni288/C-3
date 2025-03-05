@@ -1,25 +1,354 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.11.35222.181
-MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp1", "ConsoleApp1\ConsoleApp1.csproj", "{3BC0A031-084A-4AAF-9B47-8C319317D230}"
-EndProject
-Global
-	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3BC0A031-084A-4AAF-9B47-8C319317D230}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3BC0A031-084A-4AAF-9B47-8C319317D230}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3BC0A031-084A-4AAF-9B47-8C319317D230}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3BC0A031-084A-4AAF-9B47-8C319317D230}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {50A0B663-E140-4FF5-B916-BEF5A6716B23}
-	EndGlobalSection
-EndGlobal
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace TaskManager
+{
+    class Program
+    {
+        private static UserService _userService = new UserService("users.txt");
+        private static TaskService _taskService = new TaskService("tasks.txt");
+
+        static async Task Main(string[] args)
+        {
+            while (true)
+            {
+                Console.WriteLine("1. Регистрация");
+                Console.WriteLine("2. Вход");
+                string choice = Console.ReadLine();
+
+                if (choice == "1")
+                {
+                    await RegisterUser();
+                }
+                else if (choice == "2")
+                {
+                    await LoginUser();
+                }
+            }
+        }
+
+        private static async Task RegisterUser()
+        {
+            Console.Write("Введите имя пользователя: ");
+            string username = Console.ReadLine();
+
+            Console.Write("Введите пароль: ");
+            string password = Console.ReadLine();
+
+            var success = await _userService.RegisterAsync(username, password);
+            Console.WriteLine(success ? "Регистрация успешна!" : "Пользователь уже существует.");
+        }
+
+        private static async Task LoginUser()
+        {
+            Console.Write("Введите имя пользователя: ");
+            string username = Console.ReadLine();
+
+            Console.Write("Введите пароль: ");
+            string password = Console.ReadLine();
+
+            if (await _userService.LoginAsync(username, password))
+            {
+                Console.WriteLine("Вход успешен!");
+                await ManageTasks(username);
+            }
+            else
+            {
+                Console.WriteLine("Неверные имя пользователя или пароль.");
+            }
+        }
+
+        private static async Task ManageTasks(string username)
+        {
+            while (true)
+            {
+                Console.WriteLine("1. Создать задачу");
+                Console.WriteLine("2. Показать задачи");
+                Console.WriteLine("3. Редактировать задачу");
+                Console.WriteLine("4. Удалить задачу");
+                Console.WriteLine("5. Выход");
+                string choice = Console.ReadLine();
+
+                if (choice == "1")
+                {
+                    await CreateTask(username);
+                }
+                else if (choice == "2")
+                {
+                    await ShowTasks(username);
+                }
+                else if (choice == "3")
+                {
+                    await EditTask(username);
+                }
+                else if (choice == "4")
+                {
+                    await DeleteTask(username);
+                }
+                else if (choice == "5")
+                {
+                    break;
+                }
+            }
+        }
+
+        private static async Task CreateTask(string username)
+        {
+            Console.Write("Введите заголовок задачи: ");
+            string title = Console.ReadLine();
+
+            Console.Write("Введите описание задачи: ");
+            string description = Console.ReadLine();
+
+            string priority = await ChoosePriority();
+            string status = await ChooseStatus();
+
+            var task = new TaskItem
+            {
+                Title = title,
+                Description = description,
+                Priority = priority,
+                Status = status,
+                Owner = username
+            };
+
+            await _taskService.AddTaskAsync(task);
+            Console.WriteLine("Задача создана!");
+        }
+
+        private static async Task<string> ChoosePriority()
+        {
+            while (true)
+            {
+                Console.WriteLine("Выберите приоритет:");
+                Console.WriteLine("1. Низкий");
+                Console.WriteLine("2. Средний");
+                Console.WriteLine("3. Высокий");
+                string priorityChoice = Console.ReadLine();
+                string priority = priorityChoice switch
+                {
+                    "1" => "низкий",
+                    "2" => "средний",
+                    "3" => "высокий",
+                    _ => null // Некорректный ввод
+                };
+
+                if (priority != null)
+                    return priority;
+
+                Console.WriteLine("Некорректный ввод. Пожалуйста, выберите 1, 2 или 3.");
+            }
+        }
+
+        private static async Task<string> ChooseStatus()
+        {
+            while (true)
+            {
+                Console.WriteLine("Выберите статус:");
+                Console.WriteLine("1. Недоступна");
+                Console.WriteLine("2. В процессе");
+                Console.WriteLine("3. Завершена");
+                string statusChoice = Console.ReadLine();
+                string status = statusChoice switch
+                {
+                    "1" => "недоступна",
+                    "2" => "в процессе",
+                    "3" => "завершена",
+                    _ => null // Некорректный ввод
+                };
+
+                if (status != null)
+                    return status;
+
+                Console.WriteLine("Некорректный ввод. Пожалуйста, выберите 1, 2 или 3.");
+            }
+        }
+
+        private static async Task ShowTasks(string username)
+        {
+            var tasks = await _taskService.GetTasksByUserAsync(username);
+            Console.WriteLine("Ваши задачи:");
+            foreach (var task in tasks)
+            {
+                Console.WriteLine($"Заголовок: {task.Title}, Описание: {task.Description}, Приоритет: {task.Priority}, Статус: {task.Status}");
+            }
+        }
+
+        private static async Task EditTask(string username)
+        {
+            Console.Write("Введите заголовок задачи для редактирования: ");
+            string title = Console.ReadLine();
+
+            // Получаем задачу
+            var tasks = await _taskService.GetTasksByUserAsync(username);
+            var taskToEdit = tasks.FirstOrDefault(t => t.Title.Equals(title, StringComparison.OrdinalIgnoreCase));
+
+            if (taskToEdit == null)
+            {
+                Console.WriteLine("Задача не найдена.");
+                return;
+            }
+
+            Console.WriteLine($"Редактирование задачи: {taskToEdit.Title}");
+            Console.Write("Введите новое описание задачи (или оставьте пустым для сохранения текущего): ");
+            string newDescription = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(newDescription))
+            {
+                taskToEdit.Description = newDescription;
+            }
+
+            string newPriority = await ChoosePriority();
+            taskToEdit.Priority = newPriority;
+
+            string newStatus = await ChooseStatus();
+            taskToEdit.Status = newStatus;
+
+            await _taskService.UpdateTaskAsync(taskToEdit);
+            Console.WriteLine("Задача обновлена!");
+        }
+
+        private static async Task DeleteTask(string username)
+        {
+            Console.Write("Введите заголовок задачи для удаления: ");
+            string title = Console.ReadLine();
+
+            var success = await _taskService.DeleteTaskAsync(title, username);
+            Console.WriteLine(success ? "Задача удалена!" : "Задача не найдена.");
+        }
+    }
+
+    public class User
+    {
+        public required string Username { get; set; }
+        public required string Password { get; set; }
+    }
+
+    public class TaskItem
+    {
+        public required string Title { get; set; }
+        public required string Description { get; set; }
+        public required string Priority { get; set; }
+        public required string Status { get; set; }
+        public required string Owner { get; set; }
+    }
+
+    public class UserService
+    {
+        private readonly string _filePath;
+
+        public UserService(string filePath)
+        {
+            _filePath = filePath;
+        }
+
+        public async Task<bool> RegisterAsync(string username, string password)
+        {
+            var users = await GetUsersAsync();
+            if (users.Any(u => u.Username == username))
+                return false;
+
+            var user = new User { Username = username, Password = password };
+            await File.AppendAllTextAsync(_filePath, $"{user.Username},{user.Password}\n");
+            return true;
+        }
+
+        public async Task<bool> LoginAsync(string username, string password)
+        {
+            var users = await GetUsersAsync();
+            return users.Any(u => u.Username == username && u.Password == password);
+        }
+
+        private async Task<List<User>> GetUsersAsync()
+        {
+            var users = new List<User>();
+            if (File.Exists(_filePath))
+            {
+                var lines = await File.ReadAllLinesAsync(_filePath);
+                foreach (var line in lines)
+                {
+                    var parts = line.Split(',');
+                    users.Add(new User { Username = parts[0], Password = parts[1] });
+                }
+            }
+            return users;
+        }
+    }
+
+    public class TaskService
+    {
+        private readonly string _filePath;
+
+        public TaskService(string filePath)
+        {
+            _filePath = filePath;
+        }
+
+        public async Task AddTaskAsync(TaskItem task)
+        {
+            await File.AppendAllTextAsync(_filePath, $"{task.Title},{task.Description},{task.Priority},{task.Status},{task.Owner}\n");
+        }
+
+        public async Task<List<TaskItem>> GetTasksByUserAsync(string owner)
+        {
+            var tasks = await GetAllTasksAsync();
+            return tasks.Where(t => t.Owner.Equals(owner, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        public async Task<bool> DeleteTaskAsync(string title, string owner)
+        {
+            var tasks = await GetAllTasksAsync();
+            var taskToDelete = tasks.FirstOrDefault(t => t.Title.Equals(title, StringComparison.OrdinalIgnoreCase) && t.Owner == owner);
+
+            if (taskToDelete == null)
+                return false;
+
+            tasks.Remove(taskToDelete);
+            await SaveTasksAsync(tasks);
+            return true;
+        }
+
+        public async Task<bool> UpdateTaskAsync(TaskItem updatedTask)
+        {
+            var tasks = await GetAllTasksAsync();
+            var taskIndex = tasks.FindIndex(t => t.Title.Equals(updatedTask.Title, StringComparison.OrdinalIgnoreCase) && t.Owner == updatedTask.Owner);
+
+            if (taskIndex == -1)
+                return false;
+
+            tasks[taskIndex] = updatedTask;
+            await SaveTasksAsync(tasks);
+            return true;
+        }
+
+        private async Task<List<TaskItem>> GetAllTasksAsync()
+        {
+            var tasks = new List<TaskItem>();
+            if (File.Exists(_filePath))
+            {
+                var lines = await File.ReadAllLinesAsync(_filePath);
+                foreach (var line in lines)
+                {
+                    var parts = line.Split(',');
+                    tasks.Add(new TaskItem
+                    {
+                        Title = parts[0],
+                        Description = parts[1],
+                        Priority = parts[2],
+                        Status = parts[3],
+                        Owner = parts[4]
+                    });
+                }
+            }
+            return tasks;
+        }
+
+        private async Task SaveTasksAsync(List<TaskItem> tasks)
+        {
+            var lines = tasks.Select(t => $"{t.Title},{t.Description},{t.Priority},{t.Status},{t.Owner}");
+            await File.WriteAllLinesAsync(_filePath, lines);
+        }
+    }
+}
